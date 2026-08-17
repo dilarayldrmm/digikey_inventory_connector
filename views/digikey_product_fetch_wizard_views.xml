@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_digikey_product_fetch_wizard_form" model="ir.ui.view">
+        <field name="name">digikey.product.fetch.wizard.form</field>
+        <field name="model">digikey.product.fetch.wizard</field>
+        <field name="arch" type="xml">
+
+            <form string="DigiKey Product Fetch">
+
+                <sheet>
+
+                    <div class="alert alert-info" role="alert">
+                        Test Mode: DigiKey API authorization is pending.
+                        Mock data is currently being used.
+                    </div>
+
+                    <group string="Category Selection">
+
+                        <field
+                            name="category_level_1_id"
+                            domain="[('parent_id', '=', False)]"
+                            options="{'no_create': True, 'no_open': True}"
+                        />
+
+                        <field
+                            name="category_level_2_id"
+                            domain="[('parent_id', '=', category_level_1_id)]"
+                            options="{'no_create': True, 'no_open': True}"
+                        />
+
+                        <field
+                            name="category_level_3_id"
+                            domain="[('parent_id', '=', category_level_2_id)]"
+                            options="{'no_create': True, 'no_open': True}"
+                        />
+
+                        <button
+                            name="action_fetch_products"
+                            string="Ürünleri Getir"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-search"
+                        />
+
+                    </group>
+
+                    <separator string="Products - Maximum 5"/>
+
+                    <field name="line_ids" nolabel="1">
+
+                        <list
+                            create="false"
+                            delete="false"
+                            editable="bottom"
+                        >
+
+                            <field name="selected"/>
+
+                            <field
+                                name="name"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="digikey_product_number"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="manufacturer_part_number"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="manufacturer"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="available_qty"
+                                readonly="1"
+                            />
+
+                        </list>
+
+                    </field>
+
+                </sheet>
+
+                <footer>
+
+                    <button
+                        name="action_import_selected"
+                        string="Ürünü Ekle"
+                        type="object"
+                        class="btn-primary"
+                    />
+
+                    <button
+                        string="Kapat"
+                        special="cancel"
+                        class="btn-secondary"
+                    />
+
+                </footer>
+
+            </form>
+
+        </field>
+    </record>
+
+</odoo>

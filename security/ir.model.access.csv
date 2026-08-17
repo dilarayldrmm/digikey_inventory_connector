@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_digikey_connector_manager,digikey.connector manager,model_digikey_connector,stock.group_stock_manager,1,1,0,0
+access_digikey_category_manager,digikey.category manager,model_digikey_category,stock.group_stock_manager,1,1,1,1
+access_digikey_product_fetch_wizard_manager,digikey.product.fetch.wizard manager,model_digikey_product_fetch_wizard,stock.group_stock_manager,1,1,1,1
+access_digikey_product_fetch_wizard_line_manager,digikey.product.fetch.wizard.line manager,model_digikey_product_fetch_wizard_line,stock.group_stock_manager,1,1,1,1

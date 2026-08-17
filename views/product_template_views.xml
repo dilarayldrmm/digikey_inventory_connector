@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_product_template_form_digikey" model="ir.ui.view">
+        <field name="name">product.template.form.digikey</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//page[@name='general_information']/group" position="after">
+
+                <group
+                    string="DigiKey Information"
+                    invisible="not digikey_product_number"
+                >
+                    <group>
+                        <field name="digikey_product_number" readonly="1"/>
+                        <field name="digikey_manufacturer_part_number" readonly="1"/>
+                        <field name="digikey_manufacturer" readonly="1"/>
+                    </group>
+
+                    <group>
+                        <field name="digikey_supplier_available_qty" readonly="1"/>
+                        <field name="digikey_datasheet_url" widget="url" readonly="1"/>
+                        <field name="digikey_product_url" widget="url" readonly="1"/>
+                    </group>
+                </group>
+
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
