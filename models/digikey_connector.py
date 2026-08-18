@@ -24,6 +24,16 @@ class DigiKeyConnector(models.Model):
         default="sandbox",
     )
 
+    data_source = fields.Selection(
+        [
+            ("mock", "Test Data"),
+            ("api", "DigiKey API"),
+        ],
+        string="Product Data Source",
+        required=True,
+        default="mock",
+    )
+
     client_id = fields.Char(string="Client ID")
     client_secret = fields.Char(string="Client Secret")
 
@@ -147,7 +157,7 @@ class DigiKeyConnector(models.Model):
                 f"Response: {response.text}"
             )
 
-        data = response.json()
+        data = response.json() 
 
         categories = data.get("Categories", [])
 
@@ -207,11 +217,16 @@ class DigiKeyConnector(models.Model):
 
     def action_open_product_fetch(self):
         self.ensure_one()
-        self.env["digikey.category"].ensure_mock_categories()
+        self.env["digikey.category"].sync_categories_from_service(self)
         return {
             "type": "ir.actions.act_window",
             "name": "DigiKey Product Fetch",
             "res_model": "digikey.product.fetch.wizard",
             "view_mode": "form",
             "target": "new",
+            "context": {
+                "default_connector_id": self.id,
+            },
         }
+
+    

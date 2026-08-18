@@ -32,5 +32,5 @@ class ProductTemplate(models.Model):
 
     digikey_product_url = fields.Char(
         string="DigiKey Product URL",
-        copy=False,
+        copy=False, 
     )

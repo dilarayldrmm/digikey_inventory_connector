@@ -1,5 +1,7 @@
 from odoo import api, fields, models
 
+from ..services.digikey_api_service import DigiKeyAPIService
+
 
 class DigiKeyCategory(models.Model):
     _name = "digikey.category"
@@ -42,71 +44,71 @@ class DigiKeyCategory(models.Model):
     ]
 
     @api.model
-    def _get_or_create_mock_category(self, external_id, name, parent=False):
-        category = self.search(
-            [("external_id", "=", external_id)],
-            limit=1,
-        )
-
-        values = {
-            "name": name,
-            "parent_id": parent.id if parent else False,
-        }
-
-        if category:
-            category.write(values)
-        else:
-            values["external_id"] = external_id
-            category = self.create(values)
-
-        return category
-
-    @api.model
-    def ensure_mock_categories(self):
+    def sync_categories_from_service(self, connector):
         """
-        Temporary category hierarchy.
-
-        This method will later be replaced by
-        DigiKey Product Information V4 Categories API.
+        Synchronize categories from the selected data source.
+        Mock mode:
+            DigiKeyAPIService -> mock categories
+        API mode:
+            DigiKeyAPIService -> real DigiKey Categories API
         """
+        categories = DigiKeyAPIService.get_categories(connector)
+        if not categories:
+            return True
 
-        electronics = self._get_or_create_mock_category(
-            "mock-electronics",
-            "Electronic Components",
-        )
+        Category = self.with_context(active_test=False)
 
-        sensors = self._get_or_create_mock_category(
-            "mock-sensors",
-            "Sensors",
-            electronics,
-        )
+        # Önce eski kaynağın kategorilerini gizle.
+        # API çağrısı hata verirse bu noktaya gelmediğimiz için
+        # mevcut çalışan kategoriler kaybolmaz.
+        Category.search([]).write({
+            "active": False,
+        })
 
-        connectors = self._get_or_create_mock_category(
-            "mock-connectors",
-            "Connectors",
-            electronics,
-        )
+        # 1. geçiş: bütün kategorileri oluştur/güncelle.
+        for category_data in categories:
+            external_id = category_data["external_id"]
+            category = Category.search(
+                [("external_id", "=", external_id)],
+                limit=1,
+            )
+            values = {
+                "name": category_data["name"],
+                "active": True,
+            }
+            if category:
+                category.write(values)
+            else:
+                values["external_id"] = external_id
+                Category.create(values)
 
-        self._get_or_create_mock_category(
-            "mock-temperature-sensors",
-            "Temperature Sensors",
-            sensors,
-        )
+        # 2. geçiş: parent-child ilişkilerini oluştur.
+        for category_data in categories:
+            category = Category.search(
+                [
+                    (
+                        "external_id",
+                        "=",
+                        category_data["external_id"],
+                    )
+                ],
+                limit=1,
+            )
+            parent_external_id = category_data.get("parent_external_id")
+            parent = False
+            if parent_external_id:
+                parent = Category.search(
+                    [
+                        (
+                            "external_id",
+                            "=",
+                            parent_external_id,
+                        )
+                    ],
+                    limit=1,
+                )
+            category.write({
+                "parent_id": parent.id if parent else False,
+            })
 
-        self._get_or_create_mock_category(
-            "mock-pressure-sensors",
-            "Pressure Sensors",
-            sensors,
-        )
-
-        self._get_or_create_mock_category(
-            "mock-headers",
-            "Headers",
-            connectors,
-        )
-
-        self._get_or_create_mock_category(
-            "mock-terminal-blocks",
-            "Terminal Blocks",
-            connectors,
-        )
+        return True

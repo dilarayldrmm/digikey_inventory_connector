@@ -24,6 +24,12 @@ class DigiKeyProductFetchWizard(models.TransientModel):
         string="Product Category",
     )
 
+    connector_id = fields.Many2one(
+        "digikey.connector",
+        string="DigiKey Connector",
+        readonly=True,
+    )
+
     line_ids = fields.One2many(
         "digikey.product.fetch.wizard.line",
         "wizard_id",
@@ -32,30 +38,106 @@ class DigiKeyProductFetchWizard(models.TransientModel):
 
     @api.onchange("category_level_1_id")
     def _onchange_category_level_1_id(self):
+        """
+        Main Category kullanıcı tarafından değiştirilirse,
+        artık ona ait olmayan alt seçimleri temizle.
+        """
+        if not self.category_level_1_id:
+            self.category_level_2_id = False
+            self.category_level_3_id = False
+            self.line_ids = [(5, 0, 0)]
+            return
+
+        if self.category_level_3_id:
+            leaf = self.category_level_3_id
+            parent = leaf.parent_id
+            grandparent = parent.parent_id if parent else False
+            expected_main = grandparent if grandparent else parent
+
+            if self.category_level_1_id == expected_main:
+                return
+
         self.category_level_2_id = False
         self.category_level_3_id = False
         self.line_ids = [(5, 0, 0)]
 
     @api.onchange("category_level_2_id")
     def _onchange_category_level_2_id(self):
+        """
+        Subcategory elle seçilirse gerekiyorsa Main Category'yi doldur.
+        Product Category tarafından otomatik doldurulduysa
+        mevcut hiyerarşiyi bozma.
+        """
+        if self.category_level_3_id:
+            leaf = self.category_level_3_id
+            parent = leaf.parent_id
+            grandparent = parent.parent_id if parent else False
+            expected_subcategory = parent if grandparent else False
+            if self.category_level_2_id == expected_subcategory:
+                return
+
+        if self.category_level_2_id:
+            parent = self.category_level_2_id.parent_id
+            if parent:
+                self.category_level_1_id = parent
+
         self.category_level_3_id = False
         self.line_ids = [(5, 0, 0)]
 
     @api.onchange("category_level_3_id")
     def _onchange_category_level_3_id(self):
+        """
+        Product Category doğrudan seçildiğinde DigiKey'in
+        gerçek parent zincirini kullanarak üst alanları doldur.
+        2 seviyeli yapı:
+            Main -> Product
+        3 seviyeli yapı:
+            Main -> Subcategory -> Product
+        """
         self.line_ids = [(5, 0, 0)]
+        if not self.category_level_3_id:
+            self.category_level_1_id = False
+            self.category_level_2_id = False
+            return
+
+        leaf = self.category_level_3_id
+        parent = leaf.parent_id
+        if not parent:
+            self.category_level_1_id = False
+            self.category_level_2_id = False
+            return
+
+        grandparent = parent.parent_id
+        if grandparent:
+            self.category_level_1_id = grandparent
+            self.category_level_2_id = parent
+        else:
+            self.category_level_1_id = parent
+            self.category_level_2_id = False
+
+    def _get_selected_category(self):
+        self.ensure_one()
+
+        if self.category_level_3_id:
+            return self.category_level_3_id
+        if self.category_level_2_id:
+            return self.category_level_2_id
+        if self.category_level_1_id:
+            return self.category_level_1_id
+
+        raise UserError(
+            _("Please select a DigiKey category first.")
+        )
 
     def action_fetch_products(self):
         self.ensure_one()
 
-        if not self.category_level_3_id:
-            raise UserError(
-                _("Please select the final product category.")
-            )
+        selected_category = self._get_selected_category()
 
         products = DigiKeyAPIService.get_products(
-            self.category_level_3_id.external_id,
+            selected_category.external_id,
             limit=5,
+            connector=self.connector_id,
         )
 
         if not products:
@@ -85,6 +167,7 @@ class DigiKeyProductFetchWizard(models.TransientModel):
                         "description": product["description"],
                         "datasheet_url": product["datasheet_url"],
                         "product_url": product["product_url"],
+                        "photo_url": product.get("photo_url") or "",
                     },
                 )
             )
@@ -96,6 +179,34 @@ class DigiKeyProductFetchWizard(models.TransientModel):
         return {
             "type": "ir.actions.act_window",
             "name": _("DigiKey Product Fetch"),
+            "res_model": "digikey.product.fetch.wizard",
+            "view_mode": "form",
+            "res_id": self.id,
+            "target": "new",
+        }
+
+    def action_select_all(self):
+        self.ensure_one()
+        self.line_ids.write({
+            "selected": True,
+        })
+        return {
+            "type": "ir.actions.act_window",
+            "name": "DigiKey Product Fetch",
+            "res_model": "digikey.product.fetch.wizard",
+            "view_mode": "form",
+            "res_id": self.id,
+            "target": "new",
+        }
+
+    def action_clear_selection(self):
+        self.ensure_one()
+        self.line_ids.write({
+            "selected": False,
+        })
+        return {
+            "type": "ir.actions.act_window",
+            "name": "DigiKey Product Fetch",
             "res_model": "digikey.product.fetch.wizard",
             "view_mode": "form",
             "res_id": self.id,
@@ -157,57 +268,69 @@ class DigiKeyProductFetchWizard(models.TransientModel):
 
         if not selected_lines:
             raise UserError(
-                _("Please select a product to import.")
-            )
-
-        if len(selected_lines) > 1:
-            raise UserError(
-                _("Please select only one product.")
-            )
-
-        line = selected_lines[0]
-
-        existing_product = self.env["product.template"].search(
-            [
-                (
-                    "digikey_product_number",
-                    "=",
-                    line.digikey_product_number,
-                )
-            ],
-            limit=1,
-        )
-
-        if existing_product:
-            raise UserError(
-                _(
-                    "This DigiKey product already exists in Odoo: %s"
-                )
-                % existing_product.display_name
+                _("Please select at least one product to import.")
             )
 
         category = self._get_or_create_odoo_category()
 
-        product = self.env["product.template"].create({
-            "name": line.name,
-            "type": "consu",
-            "categ_id": category.id,
-            "description": line.description,
-            "digikey_product_number": line.digikey_product_number,
-            "digikey_manufacturer_part_number":
-                line.manufacturer_part_number,
-            "digikey_manufacturer": line.manufacturer,
-            "digikey_supplier_available_qty": line.available_qty,
-            "digikey_datasheet_url": line.datasheet_url,
-            "digikey_product_url": line.product_url,
-        })
+        created_product_ids = []
+
+        for line in selected_lines:
+            existing_product = self.env["product.template"].search(
+                [
+                    (
+                        "digikey_product_number",
+                        "=",
+                        line.digikey_product_number,
+                    )
+                ],
+                limit=1,
+            )
+
+            if existing_product:
+                continue
+
+            product_values = {
+                "name": line.name,
+                "type": "consu",
+                "is_storable": True,
+                "tracking": "none",
+                "categ_id": category.id,
+                "description": line.description,
+                "digikey_product_number": line.digikey_product_number,
+                "digikey_manufacturer_part_number":
+                    line.manufacturer_part_number,
+                "digikey_manufacturer": line.manufacturer,
+                "digikey_supplier_available_qty": line.available_qty,
+                "digikey_datasheet_url": line.datasheet_url,
+                "digikey_product_url": line.product_url,
+            }
+
+            image_data = DigiKeyAPIService.download_product_image(
+                line.photo_url
+            )
+            if image_data:
+                product_values["image_1920"] = image_data
+
+            product = self.env["product.template"].create(product_values)
+            created_product_ids.append(product.id)
+
+        if not created_product_ids:
+            raise UserError(
+                _("Selected products already exist in Odoo.")
+            )
+
+        created_products = self.env["product.template"].browse(
+            created_product_ids
+        )
 
         return {
             "type": "ir.actions.act_window",
-            "name": _("Imported Product"),
+            "name": _("Imported Products"),
             "res_model": "product.template",
-            "view_mode": "form",
-            "res_id": product.id,
+            "view_mode": "list,form",
+            "domain": [("id", "in", created_product_ids)],
+            "res_id": created_products[0].id,
             "target": "current",
         }
 
@@ -263,5 +386,10 @@ class DigiKeyProductFetchWizardLine(models.TransientModel):
 
     product_url = fields.Char(
         string="Product URL",
+        readonly=True,
+    )
+
+    photo_url = fields.Char(
+        string="Photo URL",
         readonly=True,
     )

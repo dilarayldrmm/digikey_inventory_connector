@@ -10,6 +10,8 @@
 
                 <sheet>
 
+                    <field name="connector_id" invisible="1"/>
+
                     <div class="alert alert-info" role="alert">
                         Test Mode: DigiKey API authorization is pending.
                         Mock data is currently being used.
@@ -31,7 +33,7 @@
 
                         <field
                             name="category_level_3_id"
-                            domain="[('parent_id', '=', category_level_2_id)]"
+                            domain="[('child_ids', '=', False)]"
                             options="{'no_create': True, 'no_open': True}"
                         />
 
@@ -46,6 +48,23 @@
                     </group>
 
                     <separator string="Products - Maximum 5"/>
+
+                    <div class="mb-2">
+                        <button
+                            name="action_select_all"
+                            string="Tümünü Seç"
+                            type="object"
+                            class="btn-secondary"
+                            icon="fa-check-square-o"
+                        />
+                        <button
+                            name="action_clear_selection"
+                            string="Seçimi Temizle"
+                            type="object"
+                            class="btn-secondary"
+                            icon="fa-square-o"
+                        />
+                    </div>
 
                     <field name="line_ids" nolabel="1">
 
